@@ -5,6 +5,7 @@ import urlparse
 import pickle
 import os
 import json
+import pydoc
 
 from BeautifulSoup import BeautifulSoup
 from time import sleep, strftime, localtime
@@ -326,6 +327,3 @@ def main():
             log("Complete", indent=True, extraLine=False, time=False)
         # check every 10 mins
         sleep(600)
-
-
-main()
