@@ -1,4 +1,11 @@
+#IDE
+.idea/
+#mac
+.DS_STORE
+
+
 *.py[cod]
+*.pyc
 
 # C extensions
 *.so
