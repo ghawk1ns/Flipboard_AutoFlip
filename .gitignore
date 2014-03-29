@@ -1,9 +1,18 @@
-#IDE
+#Personal Files
+test.py
+log.txt
+myDatabase
+
+#properties files
+*.properties
+
+#PyCharm
 .idea/
-#mac
+
+#Apple
 .DS_STORE
 
-
+#Python
 *.py[cod]
 *.pyc
 
