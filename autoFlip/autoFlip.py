@@ -92,9 +92,9 @@ class pickleDB(object):
         ''' Loads the db from file'''
         try:
             #check if file exists
-            if os.path.isfile(self.dbName):
+            if os.path.isfile('database/'+self.dbName):
                 #open it
-                with open(self.dbName, 'rb') as f:
+                with open('database/'+self.dbName, 'rb') as f:
                     # If the file isn't at its end or empty
                     if f.tell() != os.fstat(f.fileno()).st_size:
                         self.container = pickle.load(f)
@@ -248,7 +248,7 @@ def log(report, indent=False, extraLine=False, time=True):
     final += report+'\n'
     if extraLine:
         final += '\n'
-    with open("log.txt", "a") as log:
+    with open("log/log.txt", "a") as log:
             log.write(final)
 
 
@@ -264,10 +264,10 @@ def init():
     '''
     try:
         #get the login credentials
-        with open("login.properties", "r") as file:
+        with open("properties/login.properties", "r") as file:
             data = json.load(file)
         #get the rest of the properties
-        with open("init.properties", "r") as file:
+        with open("properties/init.properties", "r") as file:
             data.update(json.load(file))
     except Exception, e:
         print 'Initialization error: ' + e.message
@@ -328,6 +328,7 @@ if __name__ == "__main__":
 
     #load Pickle database
     db = pickleDB(dbName)
+
     ################################################
     ## Runner ##
     ############
