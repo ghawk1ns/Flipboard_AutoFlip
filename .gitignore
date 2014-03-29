@@ -4,7 +4,7 @@ log.txt
 myDatabase
 
 #properties files
-#*.properties
+*.properties
 
 #PyCharm
 .idea/
