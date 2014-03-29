@@ -1,11 +1,6 @@
+Flipboard_AutoFlip
 ======================
-= Flipboard_AutoFlip =
-======================
-Author: Guy Hawkins
-Last Edited: 3/29/2014
-----------------------
-
-A service to aggregate links from the pages of websites and and conditionally flip them into selected magazines
+A service to aggregate links from the pages of websites and conditionally flip them into selected magazines
 
 ###############################
 ## Required Python Libraries ##
