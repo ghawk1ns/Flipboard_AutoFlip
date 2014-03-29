@@ -10,50 +10,6 @@ from time import sleep, strftime, localtime
 from pyvirtualdisplay import Display
 from selenium import webdriver
 
-##################
-## URL scrapper ##
-##################
-class MyOpener(urllib.FancyURLopener):
-    version = 'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.2.15) Gecko/20110303 Firefox/3.6.15'
-
-def scrape(url):
-    '''
-    return a list of urls scraped from the given url
-
-    args:
-    url - the url as the string in which we are to use to extract other urls
-
-    returns a list of urls gathered from the given url
-    '''
-    myOpener = MyOpener()
-    page = myOpener.open(url)
-    text = page.read()
-    page.close()
-    soup = BeautifulSoup(text)
-
-    result = []
-    for tag in soup.findAll('a', href=True):
-        tag['href'] = urlparse.urljoin(url, tag['href'])
-        result.append(str(tag['href']))
-
-    return filter(result)
-
-def filter(ls):
-    '''
-    filters a list based on a pre-defined criteria
-
-    args:;
-    ls - a list
-
-    returns a subset of list
-    '''
-    #TODO: Implement a filter for scrape
-    result = []
-    for item in ls:
-        if "robertsspaceindustries.com/comm-link/" in item:
-            result.append(item)
-    return result
-
 ##############
 ## Database ##
 ##############
@@ -69,12 +25,17 @@ class pickleDB(object):
         The key should be a flipboard magazine title and the the set should be a list of urls of articles flipped into the magazine
     '''
     def __init__(self, dbName):
-        self.dbName = dbName
+        # path where db file is saved
+        self.path = 'database/'
+        self.dbName = self.path + dbName
         self.container = dict()
         self.loadDB()
 
     def __str__(self):
         return str(self.container)
+
+    def get(self):
+        return self.container
 
     def saveDB(self):
         '''
@@ -92,9 +53,9 @@ class pickleDB(object):
         ''' Loads the db from file'''
         try:
             #check if file exists
-            if os.path.isfile('database/'+self.dbName):
+            if os.path.isfile(self.dbName):
                 #open it
-                with open('database/'+self.dbName, 'rb') as f:
+                with open(self.dbName, 'rb') as f:
                     # If the file isn't at its end or empty
                     if f.tell() != os.fstat(f.fileno()).st_size:
                         self.container = pickle.load(f)
@@ -130,6 +91,45 @@ class pickleDB(object):
             return self.container[key]
         return None
 
+##################
+## URL scrapper ##
+##################
+class MyOpener(urllib.FancyURLopener):
+    version = 'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.2.15) Gecko/20110303 Firefox/3.6.15'
+
+def scrape(url):
+    '''
+    return a list of urls scraped from the given url
+
+    args:
+    url - the url as the string in which we are to use to extract other urls
+
+    returns a list of urls gathered from the given url
+    '''
+    myOpener = MyOpener()
+    page = myOpener.open(url)
+    text = page.read()
+    page.close()
+    soup = BeautifulSoup(text)
+    result = set()
+    for tag in soup.findAll('a', href=True):
+        tag['href'] = urlparse.urljoin(url, tag['href'])
+        result.add(str(tag['href']))
+
+    return filter(url, result)
+
+def filter(url, ls):
+    '''
+    filters a list based on a pre-defined criteria
+
+    args:
+    ls - a list
+
+    returns a subset of list
+    '''
+    #TODO: Implement a filter for scrape
+    return ls
+
 ###############
 ## Flipboard ##
 ###############
@@ -143,12 +143,35 @@ def selectMagazines(url, magazines):
 
     returns list which is a subset of magazines, derived in some way by the url string
     '''
-    #TODO: determine which magazines url should be flipped into by creating a subset from magazines, ignore if only using 1 magazine
+    # TODO: determine which magazines url should be flipped into by creating a subset from magazines, ignore if only using 1 magazine
     return magazines
 
 
+def selectWebdriver(browserName):
+    '''
+         Firefox is recommended - selects the browser for selenium to launch
+         args:
+         browserName = the name of the broswer selenium should launch (chooses firefox is no match)
 
-def add_url(url, magazine, username, password, vDisplay=False):
+         returns the webdriver obj corresponding to browserName
+    '''
+    if browserName == 'Remote':
+        browser = webdriver.Remote()
+    elif browserName == 'Opera':
+        browser = webdriver.Opera()
+    elif browserName == 'PhantomJs':
+        browser = webdriver.PhantomJS()
+    elif browserName == 'Chrome':
+        browser = webdriver.Chrome()
+    elif browserName == 'Safari':
+        browser = webdriver.Safari()
+    elif browserName == "Ie":
+        browser = webdriver.Ie()
+    else:
+        browser = webdriver.Firefox()
+    return browser
+
+def flipIntoMag(url, magazine, username, password, vDisplay=False, browserName=None):
     '''
     flips an article into flipboard magazines. Uses Selenium to execute javascript in firefox.
 
@@ -159,13 +182,14 @@ def add_url(url, magazine, username, password, vDisplay=False):
     password - the user's password as a string
     vDisplay - flag to determine if we are to use the python virtual display
     '''
+    browser = None
     try:
         # Launch virtual display if running in background or from cloud service/server such as digitalocean or heroku
         if vDisplay:
             display = Display()
             display.start()
-        #TODO: make browser an init property - giver user a browser choice
-        browser = webdriver.Firefox()
+        #Firefox is recommended
+        browser = selectWebdriver(browserName)
         browser.get(url)
         sleep(5)
         # Flip It Tool javascript
@@ -212,11 +236,14 @@ def add_url(url, magazine, username, password, vDisplay=False):
         log(e.message, indent=False, extraLine=False, time=True)
         addedToMagazine = False
     finally:
-        log("Stopping browser", indent=True, extraLine=False, time=False)
-        browser.quit()
-        if vDisplay:
-            log("Stopping display", indent=True, extraLine=False, time=False)
-            display.stop
+        if browser:
+            log("Stopping browser", indent=True, extraLine=False, time=False)
+            browser.quit()
+            if vDisplay:
+                log("Stopping display", indent=True, extraLine=False, time=False)
+                display.stop
+        else:
+            log("vDisplay error", indent=True, extraLine=False, time=False)
         return addedToMagazine
 
 
@@ -230,6 +257,7 @@ def getTime():
     return strftime("%Y-%m-%d %H:%M:%S", localtime())
 
 def log(report, indent=False, extraLine=False, time=True):
+
     '''Generates a log by saving to log.txt and outputting to command line
 
     parameters:
@@ -322,6 +350,9 @@ if __name__ == "__main__":
     # The minutes to sleep in-between checks
     sleepIntervalMinutes = properties["sleepIntervalMinutes"]
     assert_property(sleepIntervalMinutes, int)
+    #The browser selenium should use
+    browser = properties["browser"]
+    assert_property(str(browser), str)
 
     # add new properties as needed
     # ...
@@ -337,7 +368,7 @@ if __name__ == "__main__":
     while True:
         count += 1
         for website in websites:
-            log("Polling for urls: " + str(count), indent=False, extraLine=False, time=True)
+            log(str(count) + ". Polling for urls from: " + str(website), indent=False, extraLine=False, time=True)
             # get urls from website
             urls = scrape(website)
             log("found " + str(len(urls)) + " urls", indent=True, extraLine=False, time=False)
@@ -347,10 +378,11 @@ if __name__ == "__main__":
                 selectedMagazines = selectMagazines(url, magazines)
                 # add article to the proper magazines
                 for magTitle in selectedMagazines:
+	            log('checking ' + magTitle, indent=True)
                     if not db.contains(magTitle, url):
                         log("Attempting to add " + url + " to " + magTitle, indent=True, extraLine=False, time=False)
                         # attempt to add the url to the magazines
-                        isFlipped = add_url(url, magTitle, username, password, vDisplay)
+                        isFlipped = flipIntoMag(url, magTitle, username, password, vDisplay, browser)
                         if isFlipped:
                             log("adding to db")
                             db.addAndSave(magTitle, url)
@@ -358,7 +390,7 @@ if __name__ == "__main__":
                             log("NOT adding to db")
                     else:
                         log(url + ' is already in ' + magTitle, indent=True)
-            log("autoFlip Complete", indent=True, extraLine=False, time=False)
+        log("autoFlip Complete, sleeping for " + str(sleepIntervalMinutes) + "minutes", indent=True, extraLine=False, time=False)
         # check every sleepIntervalMinutes mins
         sleep(sleepIntervalMinutes*60)
 
