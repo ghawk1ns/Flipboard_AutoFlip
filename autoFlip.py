@@ -5,14 +5,10 @@ import urlparse
 import pickle
 import os
 import json
-import pydoc
-
 from BeautifulSoup import BeautifulSoup
 from time import sleep, strftime, localtime
 from pyvirtualdisplay import Display
 from selenium import webdriver
-
-
 
 ##################
 ## URL scrapper ##
@@ -52,7 +48,11 @@ def filter(ls):
     returns a subset of list
     '''
     #TODO: Implement a filter for scrape
-    return ls
+    result = []
+    for item in ls:
+        if "robertsspaceindustries.com/comm-link/" in item:
+            result.append(item)
+    return result
 
 ##############
 ## Database ##
@@ -61,40 +61,74 @@ def filter(ls):
     A Pickle database to keep track of urls flipped into magazines
 '''
 class DB(object):
+    '''
+    A Pickle DB
 
+    vars:
+    container - the underlying container of the db with the intention of it being a dictionary. Each key returns a set.
+        The key should be a flipboard magazine title and the the set should be a list of urls of articles flipped into the magazine
+    '''
     def __init__(self, dbName):
         self.dbName = dbName
-        self.container = set()
+        self.container = dict()
         self.loadDB()
 
     def __str__(self):
         return str(self.container)
 
     def saveDB(self):
-        with open(self.dbName, 'wb') as f:
-            pickle.dump(self.container, f)
+        '''
+         saves the db to file set in init.properties
+        '''
+        try:
+            with open(self.dbName, 'wb') as f:
+                pickle.dump(self.container, f)
+            log('db saved')
+        except Exception, e:
+            log('Error saving DB: ' + e.message)
+
 
     def loadDB(self):
-        #check if file exists
-        if os.path.isfile(self.dbName):
-            #open it
-            with open(self.dbName, 'rb') as f:
-                # If the file isn't at its end or empty
-                if f.tell() != os.fstat(f.fileno()).st_size:
-                    self.container = pickle.load(f)
+        ''' Loads the db from file'''
+        try:
+            #check if file exists
+            if os.path.isfile(self.dbName):
+                #open it
+                with open(self.dbName, 'rb') as f:
+                    # If the file isn't at its end or empty
+                    if f.tell() != os.fstat(f.fileno()).st_size:
+                        self.container = pickle.load(f)
+        except Exception, e:
+            log("DB Error - could not load: " + e.message)
+            exit(-1)
 
-    def add(self, item):
-        self.container.add(item)
+    def newTable(self, key):
+        ''' Creates a new set() accessible by key '''
+        if key not in self.container:
+            self.container[key] = set()
 
-    def addAndSave(self, item):
-        self.container.add(item)
+    def add(self, key, item):
+        ''' adds a new item to set given by key'''
+        if key not in self.container:
+            self.newTable(key)
+        self.container[key].add(item)
+
+    def addAndSave(self, key, item):
+        ''' adds a new item to set given by key and saves db'''
+        self.add(key, item)
         self.saveDB()
 
-    def contains(self, item):
-        return item in self.container
+    def contains(self, key, value):
+        ''' check if table key is in db'''
+        if key in self.container:
+            return value in self.container[key]
+        return False
 
-    def getList(self):
-        return self.container
+    def getSet(self, key):
+        ''' returns the set stored by key '''
+        if key in self.container:
+            return self.container[key]
+        return None
 
 ###############
 ## Flipboard ##
@@ -109,12 +143,12 @@ def selectMagazines(url, magazines):
 
     returns list which is a subset of magazines, derived in some way by the url string
     '''
-    #TODO: determine which magazines url should be flipped into by creating a subset from magazines
+    #TODO: determine which magazines url should be flipped into by creating a subset from magazines, ignore if only using 1 magazine
     return magazines
 
 
 
-def add_url(url, magazines, username, password, vDisplay=False):
+def add_url(url, magazine, username, password, vDisplay=False):
     '''
     flips an article into flipboard magazines. Uses Selenium to execute javascript in firefox.
 
@@ -133,7 +167,7 @@ def add_url(url, magazines, username, password, vDisplay=False):
         #TODO: make browser an init property - giver user a browser choice
         browser = webdriver.Firefox()
         browser.get(url)
-        sleep(10)
+        sleep(5)
         # Flip It Tool javascript
         browser.execute_script('''
         javascript: void((function (d, w, p, s, r, t, l) {
@@ -151,49 +185,40 @@ def add_url(url, magazines, username, password, vDisplay=False):
         '''
         )
         sleep(5)
-        #Here we need to switch to the new window opened by the javascript.
+        # Here we need to switch to the new window opened by the javascript.
         browser.switch_to_window(browser.window_handles[1])
-        user_field = browser.find_element_by_name('username')
-        password_field = browser.find_element_by_name('password')
+        #select and set username
+        userField = browser.find_element_by_name('username')
+        userField.send_keys(username)
+        #select and set password
+        passwordField = browser.find_element_by_name('password')
+        passwordField.send_keys(password)
+        #submit username and pasword
         submit = browser.find_element_by_xpath('//*[@class="flbutton done left"]')
-        user_field.send_keys(username)
-        password_field.send_keys(password)
         submit.click()
-        sleep(15)# Give plenty of time to load
-        # Find magazines on web
-        allMagazines = browser.find_elements_by_xpath('//h1[@class="magazine-title ng-binding"]')
-        # select which magazine to add this too
-        selectedMagazines = selectMagazines(url, magazines)
-        addToMagazines = False
-        magCount = 0
-        for mag in allMagazines:
-            if mag.text in selectedMagazines:
-                log('Adding to: ' + mag.text, indent=True, extraLine=False, time=False)
-                mag.click()
-                magCount += 1
-        if magCount > 0:
-            if magCount != len(selectedMagazines):
-                log('Could not flip into all selected magazines flipped ' + magCount + ' of ' + len(selectedMagazines), indent=True, extraLine=False, time=False)
-            else:
-                log('Flipped into all selected magazines', indent=True, extraLine=False, time=False)
-            # submit
-            add = browser.find_element_by_xpath('//*[@class="btn right"]')
-            add.click()
-            # ensure it processes
-            sleep(.5)
-        else:
-            log('Could not flip: ' + mag.text, indent=True, extraLine=False, time=False)
-            log('\tselectedMagazines: ' + selectedMagazines, indent=True, extraLine=False, time=False)
-            log('\tallMagazines ' + allMagazines, indent=True, extraLine=False, time=False)
+        # give page time to load
+        sleep(1)
+        # Select the search bar and input the magazine title
+        search_field = browser.find_element_by_xpath('//*[@class="mag-search ng-pristine ng-valid"]')
+        search_field.send_keys(magazine)
+        sleep(5)
+        # Searching for the exact magazine name will select the magazine, now add to magazine
+        add = browser.find_element_by_xpath('//*[@class="btn right"]')
+        add.click()
+        sleep(5)
+        addedToMagazine = True
     except Exception, e:
         log('An error has occurred while trying to flip url into selected magazines', indent=False, extraLine=False, time=True)
         log(e.message, indent=False, extraLine=False, time=True)
+        addedToMagazine = False
     finally:
         log("Stopping browser", indent=True, extraLine=False, time=False)
         browser.quit()
         if vDisplay:
             log("Stopping display", indent=True, extraLine=False, time=False)
-            display.stop()
+            display.stop
+        return addedToMagazine
+
 
 #######################################################################################
 #######################################################################################
@@ -268,9 +293,9 @@ def assert_property(prop, expectedType):
     if expectedType is bool:
         pass
 
-def main():
+if __name__ == "__main__":
     '''
-    The main function of autoFlip. Call this to start the service.
+    The main function of autoFlip.
     '''
     #######################
     ## Initialize project ##
@@ -317,13 +342,22 @@ def main():
             log("found " + str(len(urls)) + " urls", indent=True, extraLine=False, time=False)
             for url in urls:
                 # make sure we have not already added this url to our magazines
-                if not db.contains(url):
-                    log("Attempting to add " + url, indent=True, extraLine=False, time=False)
-                    # attempt to add the url to the magazines
-                    add_url(url, magazines, username, password, vDisplay)
-                    sleep(3)
-                    db.addAndSave(url)
-                    sleep(3)
-            log("Complete", indent=True, extraLine=False, time=False)
-        # check every 10 mins
-        sleep(600)
+                # from your listed magazines, select the ones to flip this article into
+                selectedMagazines = selectMagazines(url, magazines)
+                # add article to the proper magazines
+                for magTitle in selectedMagazines:
+                    if not db.contains(magTitle, url):
+                        log("Attempting to add " + url + " to " + magTitle, indent=True, extraLine=False, time=False)
+                        # attempt to add the url to the magazines
+                        isFlipped = add_url(url, magTitle, username, password, vDisplay)
+                        if isFlipped:
+                            log("adding to db")
+                            db.addAndSave(magTitle, url)
+                        else:
+                            log("NOT adding to db")
+                    else:
+                        log(url + ' is already in ' + magTitle, indent=True)
+            log("autoFlip Complete", indent=True, extraLine=False, time=False)
+        # check every sleepIntervalMinutes mins
+        sleep(sleepIntervalMinutes*60)
+
